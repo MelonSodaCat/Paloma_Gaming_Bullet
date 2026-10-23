@@ -1,6 +1,7 @@
 use bevy::{color::palettes::basic::TEAL, prelude::*};
 
-///Needs modification, its only the working version not the tidy version
+mod camera;
+
 
 const SPRITE_SIZE: f32 = 100.;
 const BOUNDS: Vec2 = Vec2::new(1200.0, 640.0);
@@ -18,14 +19,17 @@ const ENEMY_SIZE: f32 = 40.;
 ///Hit radius used for collisions
 const ENEMY_RADIUS: f32 = ENEMY_SIZE / 2.;
 ///How many shots an enemy survives
-const ENEMY_HEALTH: i32 = 3;
+const ENEMY_HEALTH: i32 = 1;
 const ENEMY_SPEED: f32 = 100.;
 const ENEMY_COUNT: u32 = 5;
 const ENEMY_SPACING: f32 = 120.;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((
+            DefaultPlugins, 
+            camera::CameraPlugin
+            ))
         .insert_resource(Time::<Fixed>::from_hz(60.0)) //frame rate
         .add_systems(Startup, setup)
         .add_systems(
@@ -34,7 +38,6 @@ fn main() {
                 move_player,
                 shoot,
                 apply_velocity,
-                bounce_enemies,
                 projectile_hits_enemies,
                 despawn_expired,
             )
@@ -122,28 +125,14 @@ fn move_player(
     transform.translation = transform.translation.min(extents).max(-extents);
 }
 
-///Moves everything that has a Velocity (projectiles and enemies)
-fn apply_velocity(time: Res<Time>, mut query: Query<(&mut Transform, &Velocity)>) {
+///Moves everything that has a Velocity projectiles
+fn apply_velocity(time: Res<Time>, mut query: Query<(&mut Transform, &Velocity), With<Projectile>>) {
     for (mut transform, velocity) in &mut query {
         transform.translation += (velocity.0 * time.delta_secs()).extend(0.);
     }
 }
 
-///Enemies move sideways as a group; when any of them reaches the edge they all turn around
-fn bounce_enemies(mut enemies: Query<(&Transform, &mut Velocity), With<Enemy>>) {
-    let limit = BOUNDS.x / 2.;
 
-    let hit_edge = enemies.iter().any(|(transform, velocity)| {
-        (transform.translation.x > limit && velocity.0.x > 0.)
-            || (transform.translation.x < -limit && velocity.0.x < 0.)
-    });
-
-    if hit_edge {
-        for (_, mut velocity) in &mut enemies {
-            velocity.0.x = -velocity.0.x;
-        }
-    }
-}
 
 ///Collision System
 /// Every tick, check each projectile against each enemy. If they overlap, the projectile
@@ -231,8 +220,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    //2D Camera
-    commands.spawn(Camera2d);
+
     //Minimal UI
     commands.spawn((
         Text::new("Use WASD to Move Around\nSpace to Shoot"),
